@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html>
+
+	<head>
+		<title>IoT_Abhiyaan</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<script src="js/jquery-3.3.1.min.js"></script>
+		
+		<script src="js/moment.min.js"></script>	
+  		<link rel="stylesheet" href="style/main.css">
+		<style>
+			table {
+			    font-family: arial, sans-serif;
+			    border-collapse: collapse;
+			    width: 100%;
+			}
+
+			td, th {
+			    border: 1px solid #dddddd;
+			    text-align: left;
+			    padding: 8px;
+			}
+
+			tr:nth-child(even) {
+			    background-color: #dddddd;
+			}
+
+			#map {
+	        height: 400px;
+	        width: 100%;
+	       }
+		</style>
+
+		<script type="text/javascript">
+			
+			function getPincodeList() {
+
+                        $.ajax({
+
+                          url: 'http://13.127.110.63:8081/pincode/list',  
+                        type: 'GET',     
+                        contentType: "application/json",
+                          dataType: 'JSONP',
+                        jsonp: false,                                           
+                                  success: function(response) { 
+                                                alert(response);                                                        
+                                                console.log("success");                                 
+                                                console.log("wiring pincodes...")                                              
+                                        //wirePincodes(response);                                       
+                                  }
+                                , error: function(response, error) {
+                                                console.log(response);
+                                                console.log("error");                           
+                                        console.log(error);
+                                      }
+                        });  
+
+                        }
+
+                        function callback(data){
+                                wirePincodes(data);
+                        }
+
+                        function wirePincodes(pincodes) {
+                                console.log("here");
+                            $('#pincodeListId').empty();
+
+                             $('#pincodeListId')
+                                    .append($("<option></option>")
+                                        .attr("value","")
+                                        .text(""));
+
+                            for(i=0; i<pincodes.length; i++){
+                                console.log(pincodes[i]);
+                                $('#pincodeListId')
+                                    .append($("<option></option>")
+                                        .attr("value",pincodes[i])
+                                        .text(pincodes[i]));
+
+                            }
+
+                                console.log(pincodes);
+             		}
+
+            function getDataForPincode(pincode) {
+
+            	console.log("getting dustbins for pincode");
+
+            	$.ajax({
+
+                          url: 'http://13.127.110.63:8081/get/dustbins?pincode='+pincode,  
+                        type: 'GET',     
+                        contentType: "application/json",
+                          dataType: 'JSONP',
+                        jsonp: false,                                           
+                                  success: function(response) { 
+                                                alert(response);                                                        
+                                                console.log("success");                                 
+                                                console.log("wiring pincodes...")                                              
+                                        //wirePincodes(response);                                       
+                                  }
+                                , error: function(response, error) {
+                                                console.log(response);
+                                                console.log("error");                           
+                                        console.log(error);
+                                      }
+                        }); 
+            }
+
+            function pincodeDataCallback(data) {
+            	console.log("callback worked!");
+            	console.log(data);
+            
+            	var dustbinHtml = '';
+            	var index = 1;
+
+            	for(i=0; i<data.length; i++, index++) {
+
+            		//console.log(data[i].level);
+
+            		dustbinHtml = dustbinHtml + "<tr><td>" +index+ "</td><td>" + data[i].deviceId  + "</td>" +  "<td>" +  data[i].lat + "</td><td>" + data[i].longitude + "</td><td>" + data[i].pincode  +"</td><td>" + data[i].level  +"</td></tr>";
+
+            	}
+
+            	$('#dustbinData').html(dustbinHtml);
+
+            	// THIS IS TO GENERATE MAP FOR DUSTBINS AND DISPLAY OPTIMIZE ROUTE
+            	generateMap(data);
+            	
+            }
+
+            function generateMap(data) {
+            	// body...
+            	console.log("generating map");
+            	var filledDustbins = [];
+
+            	for(i=0; i<data.length; i++) {
+            		if(data[i].level != undefined && data[i].level == 'Time for collection - dustbin full')
+            			filledDustbins.push(data[i]);
+            	}
+
+                console.log("filled dustbin");
+                console.log(filledDustbins);
+            	// GENERATE POINT AND MARKER
+
+            	var points = [];
+            	var waypoints = [];
+            	var source;
+            	var destination;
+            	var centerPoint;
+            	var markers = [];
+
+            	for(i=0; i<filledDustbins.length; i++) {
+            		points.push(new google.maps.LatLng(filledDustbins[i].lat, filledDustbins[i].longitude));
+            	}
+
+            	source = points[0];
+            	destination = points[1];
+
+            	for(i=1; i<points.length -1; i++) {
+            		waypoints.push( { location: points[i], stopover: true });
+            	}
+
+            	console.log("points:")
+            	console.log(points)
+            	console.log("source:")
+            	console.log(source)
+            	console.log("destination:")
+            	console.log(destination)
+            	console.log("waypoints")
+            	console.log(waypoints)
+            	centerPoint = points[0];
+
+            	myOptions = {
+		            zoom: 4,
+		            center: centerPoint
+		        },
+		        map = new google.maps.Map(document.getElementById('map'), myOptions),
+		        // Instantiate a directions service.
+		        directionsService = new google.maps.DirectionsService,
+		        directionsDisplay = new google.maps.DirectionsRenderer({
+		            map: map
+		        });
+
+		        for(i=0; i<points.length; i++) {
+
+		        	var title = '';
+                    
+                    if(i == 0)
+                        title = "Source : " + filledDustbins[i].deviceId;
+                    
+                    else if(i == points.length-1)
+                         title = "Destination : " + filledDustbins[i].deviceId;
+
+                    else
+                        title = filledDustbins[i].deviceId;
+
+		        	addMarker(points[i], map, title, title);
+		        }
+
+
+		    	calculateAndDisplayRoute(directionsService, directionsDisplay, source, destination, waypoints);
+
+            }    
+
+            function addMarker(location, map, title, label) {
+		        // Add the marker at the clicked location, and add the next-available label
+		        // from the array of alphabetical characters.
+		        var marker = new google.maps.Marker({
+		          position: location,
+		          title: title,
+		          label: label,
+		          map: map
+		        });
+		      }
+
+
+            function initMap() {
+		        
+		      /*  pointA = new google.maps.LatLng(26.9263693, 75.8079596),
+        		pointB = new google.maps.LatLng(26.9250894, 75.8027852),
+        		pointC = new google.maps.LatLng(26.9153003, 75.8310483),
+        		pointDestination = new google.maps.LatLng(26.8660552, 75.8180225),
+		        myOptions = {
+		            zoom: 4,
+		            center: pointA
+		        },
+		        map = new google.maps.Map(document.getElementById('map'), myOptions),
+		        // Instantiate a directions service.
+		        directionsService = new google.maps.DirectionsService,
+		        directionsDisplay = new google.maps.DirectionsRenderer({
+		            map: map
+		        }),
+		        markerA = new google.maps.Marker({
+		            position: pointA,
+		            title: "point A",
+		            label: "A",
+		            map: map
+		        }),
+		        markerB = new google.maps.Marker({
+		            position: pointB,
+		            title: "point B",
+		            label: "B",
+		            map: map
+		        }),		      
+		        markerC = new google.maps.Marker({
+		            position: pointC,
+		            title: "point C",
+		            label: "C",
+		            map: map
+		        });
+		        markerD = new google.maps.Marker({
+		            position: pointDestination,
+		            title: "Destination point",
+		            label: "Destination",
+		            map: map
+		        });
+
+		        var waypoints = [];
+
+		        waypoints.push( { location: pointB, stopover: true });
+		        waypoints.push( { location: pointC, stopover: true });
+
+		    // get route from A to B
+		    calculateAndDisplayRoute(directionsService, directionsDisplay, pointA, pointDestination, waypoints);*/
+			}
+
+            function calculateAndDisplayRoute(directionsService, directionsDisplay, pointA, pointB, waypts) {
+			    directionsService.route({
+			        origin: pointA,
+			        destination: pointB,
+			        waypoints: waypts,
+		          	optimizeWaypoints: true,
+			        avoidTolls: true,
+			        avoidHighways: false,
+			        travelMode: google.maps.TravelMode.DRIVING
+			    }, function (response, status) {
+			        if (status == google.maps.DirectionsStatus.OK) {
+			            directionsDisplay.setDirections(response);
+			        } else {
+			            window.alert('Directions request failed due to ' + status);
+			        }
+			    });
+			}
+
+		</script>
+	</head>
+
+	<body style="background-color: #e6f3ff">
+
+		<div><center><h2 style="color: #666633": "><div id="viewTitle"></div></h2></center><br/><br/>
+
+		<br/><br/>
+
+		<script type="text/javascript">
+
+			$(document).ready(function() {               
+                $('#viewTitle').html("IOT-ABHIYAAN : Operations Monitoring System(OMS)");
+                 getPincodeList();                    
+                 //console.log("test log");
+
+                 // ON SELECTION OF PINCODE CALL BACKEND API TO GET DATA
+	            $('#pincodeListId').change(function(){
+
+	            	console.log("selected pincode");
+	            	console.log($('#pincodeListId').val());
+
+	            	getDataForPincode($('#pincodeListId').val());
+	            });
+            });
+
+        </script>
+
+        <div style="max-width: 500; max-height: 100" >
+        	<div>
+	        	<label class="control-label" for="pincodeListId">Pincode</label>
+	        	<select id="pincodeListId" value="">
+	        		<option value=""></option>
+	        	</select>
+        	</div>
+        </div> 
+
+        <div>
+			<table style="height:300px; overflow-y:scroll; display:block;">
+				 <thead>
+                    <tr >
+                    	<td width="3%"> S.No </td>
+                        <td width="20%"> Device_ID</td>
+                        <td width="10%"> Latitude </td>
+                        <td width="10%"> Longitude </td>  
+                        <td width="10%"> Pincode </td>   
+                        <td width="20%"> Level </td>                                              
+
+                    </tr>
+                 </thead>	
+                 <tbody id="dustbinData">
+                 	
+                 </tbody>
+			</table>
+		</div>     
+
+		<div class="container">
+
+			<div id="map"></div>		  
+
+			<h3>Dustbins location and route to follow</h3> <div id="map"></div>
+<!-- Replace the value of the key parameter with your own API key. --> <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAtVK4ksVRam3vRgbIFXzVfPLa_Qw7rq_M&callback=initMap"> </script>
+
+		</div>
+	</body>
+
+</html>
